@@ -1,0 +1,36 @@
+{
+  "name": "work-notebook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Рабочая тетрадь — локальное приложение для клиентов и монтажей",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @workbook/server",
+    "build": "npm run build -w @workbook/domain && npm run build -w @workbook/contracts && npm run build -w @workbook/application && npm run build -w @workbook/infrastructure && npm run build -w @workbook/web && npm run build -w @workbook/server",
+    "check": "npm run typecheck && npm run lint:arch",
+    "typecheck": "npm run typecheck -w @workbook/domain && npm run typecheck -w @workbook/contracts && npm run typecheck -w @workbook/application && npm run typecheck -w @workbook/infrastructure && npm run typecheck -w @workbook/server && npm run typecheck -w @workbook/web",
+    "lint:arch": "node scripts/check-architecture.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:upgrade": "vitest run tests/upgrade",
+    "app:setup": "node scripts/setup/index.mjs",
+    "app:start": "node scripts/start/index.mjs",
+    "app:stop": "node scripts/stop/index.mjs",
+    "app:update": "node scripts/update/index.mjs",
+    "app:backup": "node scripts/backup/index.mjs",
+    "app:restore": "node scripts/restore/index.mjs",
+    "app:doctor": "node scripts/doctor/index.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

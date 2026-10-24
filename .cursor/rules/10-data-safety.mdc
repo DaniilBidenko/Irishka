@@ -1,0 +1,15 @@
+---
+description: Сохранность данных, миграции, backup/restore
+globs:
+  - packages/infrastructure/**
+  - db/migrations/**
+  - scripts/**
+  - tests/upgrade/**
+  - tests/integration/**
+alwaysApply: false
+---
+Ссылайся на AGENTS.md §§4–5 и WORKBOOK_MASTER_SPEC.md §§10–13.
+DATA_DIR вне репозитория; тесты только на tmp + собственный instance_id.
+Backup через SQLite Online Backup API, не filesystem copy открытого файла.
+Миграции append-only; production — только controlled update/setup с pre-update backup.
+Исчезнувшая БД ≠ новая пустая. Не обещать «Сохранено» без commit.

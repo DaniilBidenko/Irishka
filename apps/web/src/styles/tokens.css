@@ -1,0 +1,87 @@
+:root {
+  --bg: #f6f3ec;
+  --surface: #fffefa;
+  --selected: #eee8db;
+  --text: #292d29;
+  --muted: #5f665e;
+  --border: #dcd6c8;
+  --accent: #486b59;
+  --hover: #f0ede4;
+  --done: #e8f0e5;
+  --danger: #a33d35;
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --font: "Segoe UI", system-ui, sans-serif;
+  --fs: 16px;
+  --fs-sm: 13px;
+  --fs-title: 22px;
+  --stage-crm: #315d82;
+  --stage-you: #675184;
+  --stage-pp: #7b5c20;
+  --stage-mon: #236b66;
+  --stage-gv: #436a35;
+  --stage-so: #8d455d;
+  --deadline-ok: #436a35;
+  --deadline-warn: #9a6b16;
+  --deadline-danger: #a33d35;
+  --deadline-strong: #7a2420;
+  --deadline-muted: #5f665e;
+  --focus: #486b59;
+}
+
+:root[data-font-size="large"] {
+  --fs: 18px;
+  --fs-sm: 15px;
+  --fs-title: 24px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.4;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

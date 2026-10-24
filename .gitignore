@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+apps/web/dist/
+apps/server/dist/
+packages/*/dist/
+
+# SQLite / data (never commit user data)
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Backups, logs, runtime
+backups/
+logs/
+.runtime/
+*.log
+
+# Env / secrets / local config
+.env
+.env.*
+!.env.example
+config.local.json
+launcher.local.json
+
+# User exports
+exports/
+*.backup.zip
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test / coverage / playwright
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.tmp/
+.temp-data/
+
+# Releases (local)
+releases/
