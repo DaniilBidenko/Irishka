@@ -1,6 +1,8 @@
 import type {
   ClientRecord,
   ClientRepository,
+  CostServiceRecord,
+  CostServiceRepository,
   CustomFieldRepository,
   InstallationListItem,
   InstallationQueryParams,
@@ -15,6 +17,7 @@ import type {
 import {
   emptyStages,
   escapeLikeLiteral,
+  isCostCategory,
   type ClientKind,
   type StageCode,
   type StagesMap,
@@ -248,6 +251,15 @@ export function createClientRepository(db: SqliteDb): ClientRepository {
       ).run(restoredAt, batchId);
       return c.changes;
     },
+    listTrashed() {
+      const rows = db
+        .prepare(
+          `SELECT * FROM clients WHERE deleted_at IS NOT NULL
+           ORDER BY deleted_at DESC, id`,
+        )
+        .all() as ClientRow[];
+      return rows.map(mapClient);
+    },
   };
 }
 
@@ -453,6 +465,24 @@ export function createInstallationRepository(
         )
         .all(clientId) as Array<{ id: string }>;
       return rows.map((r) => r.id);
+    },
+    listTrashed() {
+      const rows = db
+        .prepare(
+          `SELECT i.*, c.kind AS client_kind, c.display_name AS client_display_name
+           FROM installations i
+           JOIN clients c ON c.id = i.client_id
+           WHERE i.deleted_at IS NOT NULL
+           ORDER BY i.deleted_at DESC, i.id`,
+        )
+        .all() as Array<
+        InstRow & { client_kind: string; client_display_name: string }
+      >;
+      return rows.map((r) => ({
+        ...mapInstallation(db, r),
+        clientKind: r.client_kind as ClientKind,
+        clientDisplayName: r.client_display_name,
+      }));
     },
     query(params: InstallationQueryParams) {
       const where: string[] = ["i.deleted_at IS NULL"];
@@ -751,6 +781,118 @@ export function createChangeLog(db: SqliteDb): ChangeLogPort {
         entry.timestamp,
         entry.operationId,
       );
+    },
+  };
+}
+
+type CostServiceRow = {
+  id: string;
+  category: string;
+  name: string;
+  price_minor: number;
+  currency_code: string;
+  currency_scale: number;
+  sort_order: number;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+function mapCostService(row: CostServiceRow): CostServiceRecord {
+  if (!isCostCategory(row.category)) {
+    throw new Error(`Некорректная категория услуги: ${row.category}`);
+  }
+  return {
+    id: row.id,
+    category: row.category,
+    name: row.name,
+    priceMinor: row.price_minor,
+    currencyCode: row.currency_code,
+    currencyScale: row.currency_scale,
+    sortOrder: row.sort_order,
+    revision: row.revision,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
+export function createCostServiceRepository(
+  db: SqliteDb,
+): CostServiceRepository {
+  return {
+    list(opts) {
+      const category = opts?.category;
+      const includeDeleted = opts?.includeDeleted === true;
+      let sql = `SELECT * FROM cost_services`;
+      const params: Array<string> = [];
+      const where: string[] = [];
+      if (!includeDeleted) where.push(`deleted_at IS NULL`);
+      if (category) {
+        where.push(`category = ?`);
+        params.push(category);
+      }
+      if (where.length) sql += ` WHERE ${where.join(" AND ")}`;
+      sql += ` ORDER BY sort_order, name, id`;
+      const rows = db.prepare(sql).all(...params) as CostServiceRow[];
+      return rows.map(mapCostService);
+    },
+    findById(id, opts) {
+      const row = db
+        .prepare(`SELECT * FROM cost_services WHERE id = ?`)
+        .get(id) as CostServiceRow | undefined;
+      if (!row) return null;
+      if (!opts?.includeDeleted && row.deleted_at) return null;
+      return mapCostService(row);
+    },
+    insert(row) {
+      db.prepare(
+        `INSERT INTO cost_services (
+          id, category, name, price_minor, currency_code, currency_scale,
+          sort_order, revision, created_at, updated_at, deleted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      ).run(
+        row.id,
+        row.category,
+        row.name,
+        row.priceMinor,
+        row.currencyCode,
+        row.currencyScale,
+        row.sortOrder,
+        row.revision,
+        row.createdAt,
+        row.updatedAt,
+      );
+    },
+    update(row, expectedRevision) {
+      const info = db
+        .prepare(
+          `UPDATE cost_services
+           SET name = ?, price_minor = ?, sort_order = ?,
+               revision = ?, updated_at = ?
+           WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+        )
+        .run(
+          row.name,
+          row.priceMinor,
+          row.sortOrder,
+          row.revision,
+          row.updatedAt,
+          row.id,
+          expectedRevision,
+        );
+      return info.changes === 1;
+    },
+    softDelete(id, deletedAt, expectedRevision) {
+      const info = db
+        .prepare(
+          `UPDATE cost_services
+           SET deleted_at = ?, revision = revision + 1, updated_at = ?
+           WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+        )
+        .run(deletedAt, deletedAt, id, expectedRevision);
+      return info.changes === 1;
     },
   };
 }

@@ -8,9 +8,23 @@ import {
 } from "@workbook/domain";
 import { apiClient, type ClientDto, type InstallationDto } from "../../api/client";
 import { emitSaveStatus } from "../../app/App";
+import {
+  Button,
+  IconButton,
+  IconChevronRight,
+  IconPanelLeft,
+  IconPin,
+  SearchField,
+  Switch,
+  TextArea,
+  TextField,
+  YearPicker,
+} from "../../components";
+import { publishMutation } from "../../lib/sync";
 import { InstallationCard } from "../installations/InstallationCard";
 import { DetailPanel } from "../installations/DetailPanel";
 import styles from "../../styles/app.module.css";
+import ui from "../../components/ui.module.css";
 
 const MONTHS = [
   "Янв",
@@ -104,7 +118,7 @@ export function ClientWorkspace({ kind }: { kind: ClientKind }) {
           : `${year}-${String(month).padStart(2, "0")}-01`;
       return apiClient.createInstallation({
         clientId: selected!.id,
-        title: "Новый монтаж",
+        title: "Новая задача",
         workDate,
       });
     },
@@ -135,69 +149,71 @@ export function ClientWorkspace({ kind }: { kind: ClientKind }) {
         aria-label="Клиенты"
       >
         <div className={styles.sidebarHeader}>
-          <button
-            type="button"
-            className={styles.btn}
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((v) => !v)}
-          >
-            {collapsed ? "›" : "‹"} Панель
-          </button>
-          {!collapsed && (
-            <>
-              <strong>
+          <div className={styles.sidebarTitleRow}>
+            {!collapsed && (
+              <h2 className={styles.sidebarTitle}>
                 {kind === "corporate" ? "Корпоративные" : "Розница"}
-              </strong>
-              <input
-                placeholder="Поиск"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                aria-label="Поиск клиентов"
-              />
+              </h2>
+            )}
+            <IconButton
+              label={collapsed ? "Развернуть панель клиентов" : "Свернуть панель"}
+              aria-expanded={!collapsed}
+              ghost={!collapsed}
+              onClick={() => setCollapsed((v) => !v)}
+            >
+              {collapsed ? <IconChevronRight /> : <IconPanelLeft />}
+            </IconButton>
+          </div>
+          <div className={styles.sidebarChrome} aria-hidden={collapsed}>
+            <SearchField
+              placeholder="Поиск"
+              value={q}
+              onValueChange={setQ}
+              aria-label="Поиск клиентов"
+            />
+            <Button variant="primary" onClick={() => createClient.mutate()}>
+              + Клиент
+            </Button>
+          </div>
+        </div>
+        <div className={styles.sidebarList} aria-hidden={collapsed}>
+          {clients.length === 0 ? (
+            <div className={styles.empty}>
+              <p>Пока нет клиентов.</p>
+              <Button variant="primary" onClick={() => createClient.mutate()}>
+                Добавить первого клиента
+              </Button>
+            </div>
+          ) : (
+            clients.map((c) => (
               <button
+                key={c.id}
                 type="button"
-                className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={() => createClient.mutate()}
+                tabIndex={collapsed ? -1 : undefined}
+                className={`${styles.clientItem} ${c.id === selected?.id ? styles.clientItemActive : ""}`}
+                onClick={() =>
+                  navigate(`/${kind}/${c.id}?year=${year}&month=${month}`)
+                }
               >
-                + Клиент
+                {c.pinOrder !== null && (
+                  <span className={styles.pinIcon} title="Закреплён">
+                    <IconPin width={14} height={14} />
+                  </span>
+                )}
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                  }}
+                >
+                  {c.displayName}
+                </span>
               </button>
-            </>
+            ))
           )}
         </div>
-        {!collapsed && (
-          <div className={styles.sidebarList}>
-            {clients.length === 0 ? (
-              <div className={styles.empty}>
-                <p>Пока нет клиентов.</p>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.btnPrimary}`}
-                  onClick={() => createClient.mutate()}
-                >
-                  Добавить первого клиента
-                </button>
-              </div>
-            ) : (
-              clients.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`${styles.clientItem} ${c.id === selected?.id ? styles.clientItemActive : ""}`}
-                  onClick={() =>
-                    navigate(`/${kind}/${c.id}?year=${year}&month=${month}`)
-                  }
-                >
-                  {c.pinOrder !== null && (
-                    <span className={styles.pinIcon} title="Закреплён">
-                      📌
-                    </span>
-                  )}
-                  <span>{c.displayName}</span>
-                </button>
-              ))
-            )}
-          </div>
-        )}
       </aside>
 
       <main className={styles.main}>
@@ -225,73 +241,77 @@ export function ClientWorkspace({ kind }: { kind: ClientKind }) {
                     <p style={{ margin: 0, color: "var(--muted)" }}>
                       {selected.contactName || "Контакт не указан"}
                     </p>
-                    <p style={{ margin: "4px 0 12px" }}>{selected.phone || "—"}</p>
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      onClick={() => setEditingClient(true)}
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      style={{ marginLeft: 8 }}
-                      onClick={() =>
-                        apiClient
-                          .pinClient(selected.id, {
-                            revision: selected.revision,
-                            pinned: selected.pinOrder === null,
-                            openByDefault: selected.pinOrder === null,
-                          })
-                          .then(() =>
-                            qc.invalidateQueries({ queryKey: ["clients", kind] }),
-                          )
-                      }
-                    >
-                      {selected.pinOrder === null
-                        ? "Закрепить"
-                        : "Открепить"}
-                    </button>
+                    <p style={{ margin: "4px 0 12px" }}>
+                      {selected.phone || "Телефон не добавлен"}
+                    </p>
+                    <div className={styles.infoActions}>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setEditingClient(true)}
+                      >
+                        Изменить
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          apiClient
+                            .pinClient(selected.id, {
+                              revision: selected.revision,
+                              pinned: selected.pinOrder === null,
+                              openByDefault: selected.pinOrder === null,
+                            })
+                            .then(() => {
+                              publishMutation(["clients"]);
+                              qc.invalidateQueries({
+                                queryKey: ["clients", kind],
+                              });
+                            })
+                        }
+                      >
+                        {selected.pinOrder === null ? "Закрепить" : "Открепить"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const ok = window.confirm(
+                            `Переместить «${selected.displayName}» в корзину вместе с активными монтажами?`,
+                          );
+                          if (!ok) return;
+                          void apiClient.trashClient(selected.id).then((r) => {
+                            window.alert(
+                              `В корзине. Затронуто монтажей: ${r.affectedInstallations}`,
+                            );
+                            publishMutation(["clients", "trash", "month"]);
+                            qc.invalidateQueries({
+                              queryKey: ["clients", kind],
+                            });
+                            navigate(`/${kind}`);
+                          });
+                        }}
+                      >
+                        В корзину
+                      </Button>
+                    </div>
                   </>
                 )}
               </section>
 
               <section className={styles.monthPanel} aria-label="Месяцы">
                 <div className={styles.yearRow}>
-                  <button
-                    type="button"
-                    className={styles.btn}
-                    aria-label="Предыдущий год"
-                    onClick={() => setPeriod(year - 1, month)}
-                  >
-                    ‹
-                  </button>
-                  <input
-                    className="tabular"
-                    style={{ width: 80 }}
-                    value={year}
-                    onChange={(e) => {
-                      const y = Number(e.target.value);
-                      if (y >= 1990 && y <= 2100) setPeriod(y, month);
-                    }}
-                    aria-label="Год"
+                  <YearPicker
+                    year={year}
+                    onChange={(y) => setPeriod(y, month)}
                   />
-                  <button
-                    type="button"
-                    className={styles.btn}
-                    aria-label="Следующий год"
-                    onClick={() => setPeriod(year + 1, month)}
-                  >
-                    ›
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.btn}
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setPeriod(ty, tm)}
                   >
                     Сегодня
-                  </button>
+                  </Button>
                 </div>
                 <div className={styles.monthGrid}>
                   {MONTHS.map((label, idx) => {
@@ -321,37 +341,34 @@ export function ClientWorkspace({ kind }: { kind: ClientKind }) {
               <h1 className={styles.sectionTitle}>
                 Монтажи · {MONTHS[month - 1]} {year}
               </h1>
-              <span style={{ color: "var(--muted)" }}>
+              <span className={styles.sectionMeta}>
                 {monthQuery.data?.installations.length ?? 0}
               </span>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={() => createInstallation.mutate()}
-              >
-                + Монтаж
-              </button>
-              <label style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
-                <input
-                  type="checkbox"
+              <div className={styles.sectionActions}>
+                <Switch
                   checked={showCompleted}
-                  onChange={(e) => setShowCompleted(e.target.checked)}
-                />{" "}
-                Показывать выполненные
-              </label>
+                  onCheckedChange={setShowCompleted}
+                  label="Показывать выполненные"
+                />
+                <Button
+                  variant="primary"
+                  onClick={() => createInstallation.mutate()}
+                >
+                  + Задача
+                </Button>
+              </div>
             </div>
 
             <div className={styles.cards}>
               {(monthQuery.data?.installations.length ?? 0) === 0 ? (
                 <div className={styles.empty}>
-                  <p>В этом месяце пока нет монтажей</p>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnPrimary}`}
+                  <p>В этом месяце пока нет задач</p>
+                  <Button
+                    variant="primary"
                     onClick={() => createInstallation.mutate()}
                   >
-                    Добавить монтаж
-                  </button>
+                    Добавить задачу
+                  </Button>
                 </div>
               ) : (
                 monthQuery.data!.installations.map((inst) => (
@@ -430,31 +447,39 @@ function ClientEditForm({
 
   return (
     <div>
-      <div className={styles.field}>
-        <label>{displayNameFieldLabel(kind)}</label>
-        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-      </div>
-      <div className={styles.field}>
-        <label>Контакт</label>
-        <input value={contactName} onChange={(e) => setContactName(e.target.value)} />
-      </div>
-      <div className={styles.field}>
-        <label>Телефон</label>
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-      </div>
-      <div className={styles.field}>
-        <label>Заметка</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={save}>
+      <TextField
+        label={displayNameFieldLabel(kind)}
+        value={displayName}
+        onChange={(e) => setDisplayName(e.target.value)}
+      />
+      <TextField
+        label="Контакт"
+        value={contactName}
+        onChange={(e) => setContactName(e.target.value)}
+      />
+      <TextField
+        label="Телефон"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <TextArea
+        label="Заметка"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={3}
+      />
+      <div className={ui.btnRow}>
+        <Button variant="primary" onClick={() => void save()}>
           Сохранить
-        </button>
-        <button type="button" className={styles.btn} onClick={onCancel}>
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           Отмена
-        </button>
+        </Button>
       </div>
-      <p style={{ fontSize: "var(--fs-sm)", color: "var(--muted)" }} aria-live="polite">
+      <p
+        style={{ fontSize: "var(--fs-sm)", color: "var(--muted)" }}
+        aria-live="polite"
+      >
         {status}
       </p>
     </div>

@@ -1,45 +1,50 @@
 # IMPLEMENTATION_STATUS
 
-Версия задания: WORKBOOK_MASTER_SPEC.md 1.0 · обновлено после первой реализации.
+Версия задания: WORKBOOK_MASTER_SPEC.md 1.0 · обновлено после доработки пробелов.
 
 ## Допущения
 
 - Целевая ОС: Windows 11 x64.
-- На машине разработки: Node.js **v22.17.1** (в ТЗ — LTS 24). Engines: `>=22`.
+- Node.js на машине: **v22.17.1** (в ТЗ — LTS 24). Engines: `>=22`.
 - Порт: `127.0.0.1:4318`.
-- Origin репозитория: `https://github.com/DaniilBidenko/Irishka.git` (подставлен в START_HERE_RU.md).
+- Origin: `https://github.com/DaniilBidenko/Irishka.git` (ветка `main`, коммит «Первая версия» запушен).
 
 ## Прогресс этапов (§18)
 
 | Этап | Статус |
 |---|---|
-| 1. Правила, структура, lockfile, check/test | сделано |
-| 2. Domain/application, схема v1, persistence | сделано |
-| 3. API, localhost security, launcher | сделано |
-| 4. UI разделы и карточки | сделано (основной поток) |
-| 5. Редактор, черновики, фильтры, корзина API | частично UI |
-| 6. Backup/restore/update | сделано (update упрощён до первого тега) |
-| 7. Проверки | unit+integration+arch+smoke API |
-| 8. START_HERE_RU, docs | сделано |
+| 1–4 | сделано |
+| 5. Редактор, черновики, фильтры, корзина UI | доработано |
+| 6. Backup/restore + автобэкап | доработано (update упрощён до тегов) |
+| 7–8 | docs/тесты; E2E матрица частично |
 
-## Проверенное
+## Проверенное ранее
 
-- `npm run build` — OK (domain…web…server).
-- `npm test` — 10/10 (деньги, сроки, persistence close/open, backup/restore).
-- `npm run check` — typecheck + lint:arch OK.
-- Smoke API на временном DATA_DIR: session, health, create client/installation.
-- better-sqlite3 установился на Windows x64 без отдельного компилятора.
+- build / check / 10 unit+integration tests / smoke API / better-sqlite3 на Win x64
 
-## Осознанные пробелы относительно полной приёмки §19
+## Добавлено в этой итерации
 
-- UI корзины / полного набора фильтров сроков/этапов / drag-layout полей — API и схема есть, UI урезан.
-- Custom fields: API есть, отдельный экран настройки полей неполный.
-- Multi-tab BroadcastChannel / полноценный 409-diff UI — базовая revision на API.
-- Автобэкап по таймеру 30 мин / ротация 48·30·12 — ручной backup и pre-update есть; фоновый планировщик не вынесен в сервис.
-- `app:update`: без dirty git, pre-backup, rebuild; полный staging worktree + tag channel — после появления `vX.Y.Z`.
-- Playwright E2E: smoke; полный прогон матрицы §17 требует поднятого сервера и ручного визуала.
-- Node 24 на этой машине не проверялся.
+- Раздел «Себестоимость»: 3 категории (Полиграфия / Сувенирка / Наружка), CRUD услуг (название+цена), миграция `003_cost_services`
+- Пикер услуг в подробностях монтажа («Из справочника») с поиском, выбором категории и закреплением панели
+- Клик по плашке задачи открывает подробности (корп / розница / монтажи)
+- `app:update` применяет ожидающие миграции после backup+build; dev-песочница тоже подтягивает схему
+- GET `/api/v1/trash`, UI корзины в Настройках, кнопки «В корзину»
+- Фильтры сроков и этапов на экране «Монтажи»
+- Custom fields: настройка + значения в редакторе
+- BroadcastChannel + revalidate on focus
+- Базовый UI конфликта 409
+- Автобэкап: дневной при старте + каждые 30 мин при изменениях + ротация
+- Integration test `trash`
+- UI kit + «+ Задача»; метка DEV при `.tmp`; harden `dev.ts` (нет авто-пустой БД при config)
+- Рабочие данные перенесены в `%LOCALAPPDATA%\WorkNotebook`; запуск `app:start` (`devSandbox: false`)
+- restore синхронизирует `instance_id` в config; docs DATA_SAFETY / START_HERE
+- Раздел «Контакты»: карточки имя / организация / телефон, связь с corporate|retail
+- Подробности задачи без полей цена/себестоимость/монтаж; клик по свободной зоне плашки открывает модалку
+- Миграция `003_cost_services` на production; справочник «Себестоимость» загружается
 
-## Принцип
+## Ещё открыто
 
-Код можно заменить; пользовательские данные — нет. Production DATA_DIR не трогался в тестах.
+- Drag-and-drop раскладки полей (API layout есть)
+- Полный протокол update с git tags / worktree
+- Полная E2E-матрица §17, Node 24
+- Ротация daily/monthly как отдельные корзины архивов (сейчас — лимит интервальных)

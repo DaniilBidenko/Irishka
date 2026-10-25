@@ -2,15 +2,50 @@ import { describe, expect, it } from "vitest";
 import { calendarDaysBetween, computeDeadlineStatus } from "./deadlineStatus.js";
 
 describe("deadlines", () => {
-  it("границы дней", () => {
+  it("границы дней: 2=жёлтый, 1=оранжевый, 0=красный, <0=чёрный", () => {
     const today = "2026-03-10";
-    expect(computeDeadlineStatus({ dueDate: null, completed: false, todayIso: today }).kind).toBe("none");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-14", completed: false, todayIso: today, soonThresholdDays: 3 }).kind).toBe("ok");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-13", completed: false, todayIso: today, soonThresholdDays: 3 }).kind).toBe("soon");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-12", completed: false, todayIso: today, soonThresholdDays: 3 }).kind).toBe("soon");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-11", completed: false, todayIso: today }).kind).toBe("tomorrow");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-10", completed: false, todayIso: today }).kind).toBe("today");
-    expect(computeDeadlineStatus({ dueDate: "2026-03-09", completed: false, todayIso: today }).kind).toBe("overdue");
+    expect(
+      computeDeadlineStatus({
+        dueDate: null,
+        completed: false,
+        todayIso: today,
+      }).kind,
+    ).toBe("none");
+    expect(
+      computeDeadlineStatus({
+        dueDate: "2026-03-14",
+        completed: false,
+        todayIso: today,
+      }).kind,
+    ).toBe("ok");
+    expect(
+      computeDeadlineStatus({
+        dueDate: "2026-03-12",
+        completed: false,
+        todayIso: today,
+      }),
+    ).toMatchObject({ kind: "inTwoDays", tone: "yellow" });
+    expect(
+      computeDeadlineStatus({
+        dueDate: "2026-03-11",
+        completed: false,
+        todayIso: today,
+      }),
+    ).toMatchObject({ kind: "tomorrow", tone: "orange" });
+    expect(
+      computeDeadlineStatus({
+        dueDate: "2026-03-10",
+        completed: false,
+        todayIso: today,
+      }),
+    ).toMatchObject({ kind: "today", tone: "danger" });
+    expect(
+      computeDeadlineStatus({
+        dueDate: "2026-03-09",
+        completed: false,
+        todayIso: today,
+      }),
+    ).toMatchObject({ kind: "overdue", tone: "overdue" });
   });
 
   it("завершён не просрочен", () => {

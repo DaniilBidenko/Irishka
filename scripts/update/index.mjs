@@ -53,12 +53,19 @@ async function main() {
       path.join(REPO_ROOT, "packages/infrastructure/dist/index.js"),
     ).href
   );
-  const { db, instanceId } = infra.openExistingDatabase(paths.dbPath);
+  // Backup до apply: открываем sqlite без проверки pending (иначе устаревшая схема блокирует backup).
+  const dbForBackup = infra.openSqlite(paths.dbPath);
   let backupPath;
+  let instanceId;
   try {
-    const applied = infra.getAppliedMigrations(db);
+    const applied = infra.getAppliedMigrations(dbForBackup);
+    const meta = dbForBackup
+      .prepare(`SELECT value FROM app_metadata WHERE key = 'instance_id'`)
+      .get();
+    instanceId = meta?.value;
+    if (!instanceId) throw new Error("В базе отсутствует instance_id");
     const backup = await infra.createVerifiedBackup({
-      db,
+      db: dbForBackup,
       paths,
       appVersion: "1.0.0",
       schemaVersion: applied[applied.length - 1] ?? "unknown",
@@ -69,7 +76,7 @@ async function main() {
     journal(paths, { phase: "backup-ok", backupPath });
     console.log("Backup:", backupPath);
   } finally {
-    db.close();
+    dbForBackup.close();
   }
 
   console.log("2) Остановка сервера…");
@@ -90,11 +97,34 @@ async function main() {
     throw new Error("Сборка не удалась. Рабочая БД не менялась. Backup: " + backupPath);
   }
 
-  // Миграции v1: новых нет — schema ensure без авто-apply на старте.
-  // Controlled apply would go here for future migrations on a copy first.
+  console.log("4) Применение ожидающих миграций (controlled)…");
+  // После сборки — свежий import (cache-bust), чтобы взять новый код миграций.
+  const infraAfter = await import(
+    pathToFileURL(
+      path.join(REPO_ROOT, "packages/infrastructure/dist/index.js"),
+    ).href + `?t=${Date.now()}`
+  );
+  const upgraded = infraAfter.upgradeExistingDatabase(paths.dbPath, {
+    appVersion: "1.0.0",
+  });
+  try {
+    journal(paths, {
+      phase: "migrate-ok",
+      schemaVersion: upgraded.schemaVersion,
+      applied: upgraded.applied,
+      backupPath,
+    });
+    if (upgraded.applied.length) {
+      console.log("Применены миграции:", upgraded.applied.join(", "));
+    } else {
+      console.log("Схема уже актуальна:", upgraded.schemaVersion);
+    }
+  } finally {
+    upgraded.db.close();
+  }
+
   journal(paths, { phase: "done", backupPath });
-  console.log("Обновление завершено; данные не мигрировались (схема актуальна).");
-  console.log("Запустите npm run app:start");
+  console.log("Обновление завершено. Запустите npm run app:start");
 }
 
 main().catch((err) => {

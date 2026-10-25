@@ -5,15 +5,16 @@ import { randomUUID } from "node:crypto";
 import {
   ensureRuntimeDirs,
   initializeNewDatabase,
-  openExistingDatabase,
   readConfig,
   resolveWorkbookPaths,
+  upgradeExistingDatabase,
   writeConfig,
 } from "@workbook/infrastructure";
 import {
   closeAppContext,
   createAppContext,
 } from "./bootstrap/appContext.js";
+import { startAutoBackupScheduler } from "./bootstrap/autoBackup.js";
 import { startServer } from "./http/server.js";
 
 const repoRoot = path.resolve(
@@ -30,24 +31,32 @@ function ensureDevData() {
   ensureRuntimeDirs(paths);
 
   const existing = readConfig(paths);
+
+  if (existing && !fs.existsSync(paths.dbPath)) {
+    throw new Error(
+      `Конфигурация dev есть, но база отсутствует: ${paths.dbPath}\n` +
+        "Пустая база не создаётся автоматически. Восстановите копию или укажите файл базы.",
+    );
+  }
+
   if (existing && fs.existsSync(paths.dbPath)) {
+    // Песочница (.tmp): controlled apply ожидающих миграций, чтобы dev не блокировался.
+    const upgraded = upgradeExistingDatabase(paths.dbPath, {
+      appVersion: "1.0.0-dev",
+    });
+    upgraded.db.close();
     return existing.port;
   }
 
-  let instanceId: string = randomUUID();
-  if (!fs.existsSync(paths.dbPath)) {
-    const db = initializeNewDatabase(paths.dbPath, {
-      instanceId,
-      appVersion: "1.0.0-dev",
-      currencyCode: "RUB",
-      currencyScale: 2,
-    });
-    db.close();
-  } else {
-    const opened = openExistingDatabase(paths.dbPath);
-    instanceId = opened.instanceId;
-    opened.db.close();
-  }
+  // Только осознанный первый запуск песочницы (нет config).
+  const instanceId = randomUUID();
+  const db = initializeNewDatabase(paths.dbPath, {
+    instanceId,
+    appVersion: "1.0.0-dev",
+    currencyCode: "RUB",
+    currencyScale: 2,
+  });
+  db.close();
 
   const port = Number(process.env.WORKBOOK_PORT ?? 4318);
   writeConfig(paths, {
@@ -66,9 +75,13 @@ function ensureDevData() {
 async function main() {
   const port = ensureDevData();
   createAppContext();
+  startAutoBackupScheduler();
   await startServer();
   console.log(
     `Dev-сервер: http://127.0.0.1:${port} (данные: ${process.env.WORKBOOK_DATA_DIR})`,
+  );
+  console.log(
+    "Внимание: это временная песочница. Рабочие данные — npm run app:start (%LOCALAPPDATA%\\WorkNotebook).",
   );
 }
 

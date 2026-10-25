@@ -402,7 +402,7 @@ export function queryInstallations(
   return ports.installations.query({
     ...params,
     soonThresholdDays:
-      params.soonThresholdDays ?? prefs?.value.soonThresholdDays ?? 3,
+      params.soonThresholdDays ?? prefs?.value.soonThresholdDays ?? 2,
     todayIso: ports.clock.todayLocalIsoDate(),
   });
 }

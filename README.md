@@ -27,7 +27,8 @@ npm run build
 
 | Команда | Назначение |
 |---|---|
-| `npm run app:setup` | первая установка |
+| `npm run app:install` | первый запуск: зависимости + установка + старт (без вопросов) |
+| `npm run app:setup` | только установка (без `npm ci` и без старта) |
 | `npm run app:start` / `app:stop` | запуск / остановка |
 | `npm run app:backup` / `app:restore` | копия / восстановление |
 | `npm run app:update` | безопасное обновление |

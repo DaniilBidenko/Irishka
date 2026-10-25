@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:upgrade": "vitest run tests/upgrade",
+    "app:install": "node scripts/install/index.mjs",
     "app:setup": "node scripts/setup/index.mjs",
     "app:start": "node scripts/start/index.mjs",
     "app:stop": "node scripts/stop/index.mjs",

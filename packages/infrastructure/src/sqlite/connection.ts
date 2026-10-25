@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const STAGE_CODES = ["CRM", "YOU", "PP", "MON", "GV", "SO"] as const;
+const STAGE_CODES = ["CRM", "YOU", "MON", "SO", "PP", "UR"] as const;
 
 export type SqliteDb = Database.Database;
 
@@ -146,7 +146,7 @@ export function initializeNewDatabase(
   );
   db.prepare(
     `INSERT INTO ui_preferences (key, version, value_json) VALUES ('deadline', 1, ?)`,
-  ).run(JSON.stringify({ soonThresholdDays: 3 }));
+  ).run(JSON.stringify({ soonThresholdDays: 2 }));
   return db;
 }
 
@@ -169,6 +169,34 @@ export function openExistingDatabase(dbPath: string): {
     throw new Error("В базе отсутствует instance_id");
   }
   return { db, instanceId: row.value };
+}
+
+/**
+ * Controlled upgrade: открыть БД и применить ожидающие миграции.
+ * Только для app:update / явного upgrade-пути; не для обычного старта.
+ */
+export function upgradeExistingDatabase(
+  dbPath: string,
+  opts: { appVersion: string },
+): { db: SqliteDb; instanceId: string; schemaVersion: string; applied: string[] } {
+  if (!fs.existsSync(dbPath)) {
+    throw new Error(
+      `База данных не найдена: ${dbPath}. Пустая база не создаётся автоматически.`,
+    );
+  }
+  const db = openSqlite(dbPath);
+  const { schemaVersion, applied } = ensureSchema(db, {
+    allowApply: true,
+    appVersion: opts.appVersion,
+  });
+  const row = db
+    .prepare(`SELECT value FROM app_metadata WHERE key = 'instance_id'`)
+    .get() as { value: string } | undefined;
+  if (!row?.value) {
+    db.close();
+    throw new Error("В базе отсутствует instance_id");
+  }
+  return { db, instanceId: row.value, schemaVersion, applied };
 }
 
 export { STAGE_CODES };

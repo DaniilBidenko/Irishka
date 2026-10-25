@@ -5,6 +5,7 @@ import type { SqliteDb } from "./sqlite/connection.js";
 import {
   createChangeLog,
   createClientRepository,
+  createCostServiceRepository,
   createCustomFieldRepository,
   createInstallationRepository,
   createLayoutRepository,
@@ -25,6 +26,7 @@ export function composePorts(db: SqliteDb): AppPorts {
     installations: createInstallationRepository(db),
     settings: createSettingsRepository(db),
     customFields: createCustomFieldRepository(db),
+    costServices: createCostServiceRepository(db),
     layouts: createLayoutRepository(db),
     operations: createOperationStore(db),
     changeLog: createChangeLog(db),

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   CreateClientSchema,
+  CreateCostServiceSchema,
   CreateInstallationSchema,
   DefineCustomFieldSchema,
   PinClientSchema,
@@ -9,16 +10,20 @@ import {
   SetCompletedSchema,
   SetStageSchema,
   UpdateClientSchema,
+  UpdateCostServiceSchema,
   UpdateInstallationSchema,
 } from "@workbook/contracts";
 import {
   archiveCustomField,
   createClient,
+  createCostService,
   createInstallation,
   defineCustomField,
   getClientMonth,
   getLayout,
   listClients,
+  listCostServices,
+  listTrash,
   pinClient,
   queryInstallations,
   resetLayout,
@@ -28,11 +33,17 @@ import {
   setCompleted,
   setStage,
   trashClient,
+  trashCostService,
   trashInstallation,
   updateClient,
+  updateCostService,
   updateInstallation,
 } from "@workbook/application";
-import { normalizeSearchText, isClientKind } from "@workbook/domain";
+import {
+  normalizeSearchText,
+  isClientKind,
+  isCostCategory,
+} from "@workbook/domain";
 import {
   createVerifiedBackup,
   getAppliedMigrations,
@@ -57,14 +68,18 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/v1/health", async () => {
-    const { config, db, maintenance } = getContext();
+    const { config, db, maintenance, paths } = getContext();
     const applied = getAppliedMigrations(db);
+    const dataRoot = paths.root.replace(/\\/g, "/").toLowerCase();
+    const devSandbox =
+      process.env.WORKBOOK_TEST === "1" || dataRoot.includes("/.tmp/");
     return {
       ok: true,
       appVersion: APP_VERSION,
       schemaVersion: applied[applied.length - 1] ?? null,
       instanceId: config.instanceId,
       maintenance: maintenance.enabled,
+      devSandbox,
     };
   });
 
@@ -128,6 +143,14 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
     try {
       const { id } = req.params as { id: string };
       return trashClient(getContext().ports, id);
+    } catch (err) {
+      return sendError(req, reply, err);
+    }
+  });
+
+  app.get("/api/v1/trash", async (req, reply) => {
+    try {
+      return listTrash(getContext().ports);
     } catch (err) {
       return sendError(req, reply, err);
     }
@@ -267,6 +290,15 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/installations", async (req, reply) => {
     try {
       const parsed = QueryInstallationsSchema.parse(req.query);
+      const stages: Partial<
+        Record<"CRM" | "YOU" | "MON" | "SO" | "PP" | "UR", "any" | "on" | "off">
+      > = {};
+      if (parsed.stageCRM) stages.CRM = parsed.stageCRM;
+      if (parsed.stageYOU) stages.YOU = parsed.stageYOU;
+      if (parsed.stageMON) stages.MON = parsed.stageMON;
+      if (parsed.stageSO) stages.SO = parsed.stageSO;
+      if (parsed.stagePP) stages.PP = parsed.stagePP;
+      if (parsed.stageUR) stages.UR = parsed.stageUR;
       const result = queryInstallations(getContext().ports, {
         qNormalized: parsed.q ? normalizeSearchText(parsed.q) : undefined,
         kind: parsed.kind,
@@ -277,7 +309,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
         dueTo: parsed.dueTo,
         status: parsed.status ?? "active",
         dueBucket: parsed.dueBucket,
-        stages: parsed.stages,
+        stages: Object.keys(stages).length ? stages : undefined,
         sort: parsed.sort ?? "due",
         sortDir: parsed.sortDir ?? "asc",
         limit: parsed.limit ?? 50,
@@ -315,6 +347,68 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
     try {
       const { scope } = req.params as { scope: "main" | "compact" };
       resetLayout(getContext().ports, scope);
+      return { ok: true };
+    } catch (err) {
+      return sendError(req, reply, err);
+    }
+  });
+
+  app.get("/api/v1/cost-services", async (req, reply) => {
+    try {
+      const q = req.query as { category?: string };
+      if (q.category && !isCostCategory(q.category)) {
+        return reply.code(400).send({
+          code: "VALIDATION",
+          message: "Параметр category: polygraphy|souvenirs|outdoor",
+          requestId: crypto.randomUUID(),
+        });
+      }
+      const category =
+        q.category && isCostCategory(q.category) ? q.category : undefined;
+      return {
+        items: listCostServices(
+          getContext().ports,
+          category ? { category } : undefined,
+        ),
+      };
+    } catch (err) {
+      return sendError(req, reply, err);
+    }
+  });
+
+  app.post("/api/v1/cost-services", async (req, reply) => {
+    try {
+      const body = CreateCostServiceSchema.parse(req.body);
+      return reply
+        .code(201)
+        .send(createCostService(getContext().ports, body));
+    } catch (err) {
+      return sendError(req, reply, err);
+    }
+  });
+
+  app.patch("/api/v1/cost-services/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string };
+      const body = UpdateCostServiceSchema.parse(req.body);
+      return updateCostService(getContext().ports, id, body);
+    } catch (err) {
+      return sendError(req, reply, err);
+    }
+  });
+
+  app.post("/api/v1/cost-services/:id/trash", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string };
+      const body = req.body as { revision?: number };
+      if (!body.revision) {
+        return reply.code(400).send({
+          code: "VALIDATION",
+          message: "revision обязателен",
+          requestId: crypto.randomUUID(),
+        });
+      }
+      trashCostService(getContext().ports, id, body.revision);
       return { ok: true };
     } catch (err) {
       return sendError(req, reply, err);

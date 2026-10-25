@@ -2,10 +2,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { stdin as input, stdout as output } from "node:process";
 import {
   REPO_ROOT,
   ensureDirs,
@@ -39,27 +37,12 @@ async function main() {
     );
   }
 
-  const rl = readline.createInterface({ input, output });
-  let currency = "RUB";
-  let scale = 2;
-  let externalBackupDir = null;
-  try {
-    const c = (await rl.question("Код валюты по умолчанию [RUB]: ")).trim();
-    if (c) currency = c.toUpperCase();
-    const s = (await rl.question("Знаков после запятой [2]: ")).trim();
-    if (s) scale = Number(s);
-    if (!Number.isInteger(scale) || scale < 0 || scale > 6) {
-      throw new Error("Масштаб валюты: целое 0–6");
-    }
-    const ext = (
-      await rl.question("Папка внешних копий (Enter — пропустить): ")
-    ).trim();
-    externalBackupDir = ext || null;
-  } finally {
-    rl.close();
-  }
-
+  const currency = "RUB";
+  const scale = 2;
+  const externalBackupDir = null;
+  console.log(`Валюта: ${currency}, знаков: ${scale}`);
   console.log("Сборка…");
+
   const build = spawnSync("npm", ["run", "build"], {
     cwd: REPO_ROOT,
     stdio: "inherit",
@@ -80,6 +63,15 @@ async function main() {
     currencyCode: currency,
     currencyScale: scale,
   });
+  const schemaRow = db
+    .prepare(
+      `SELECT version FROM schema_migrations ORDER BY applied_at DESC, version DESC LIMIT 1`,
+    )
+    .get();
+  const schemaVersion =
+    schemaRow && typeof schemaRow.version === "string"
+      ? schemaRow.version
+      : "001_initial";
   db.close();
 
   infra.writeConfig(paths, {
@@ -90,7 +82,7 @@ async function main() {
     defaultCurrencyCode: currency,
     defaultCurrencyScale: scale,
     externalBackupDir,
-    schemaVersion: "001_initial",
+    schemaVersion,
   });
 
   writeLauncher(paths);
@@ -98,7 +90,7 @@ async function main() {
 
   console.log("\nГотово.");
   console.log(`База: ${paths.dbPath}`);
-  console.log("Запуск: npm run app:start");
+  console.log("Запуск: npm run app:start или ярлык «Рабочая тетрадь».");
 }
 
 function writeLauncher(paths) {

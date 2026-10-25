@@ -1,4 +1,4 @@
-import type { ClientKind, StageCode } from "@workbook/domain";
+import type { ClientKind, CostCategory, StageCode } from "@workbook/domain";
 
 export type ApiError = {
   code: string;
@@ -78,6 +78,31 @@ export type ClientDto = {
   revision: number;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string | null;
+  deletionBatchId?: string | null;
+};
+
+export type CustomFieldDto = {
+  id: string;
+  label: string;
+  type: "text" | "multiline" | "number" | "date";
+  sortOrder: number;
+  archivedAt: string | null;
+  revision: number;
+};
+
+export type CostServiceDto = {
+  id: string;
+  category: CostCategory;
+  name: string;
+  priceMinor: number;
+  currencyCode: string;
+  currencyScale: number;
+  sortOrder: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 };
 
 export type InstallationDto = {
@@ -151,11 +176,52 @@ export const apiClient = {
     api<{ ok: boolean }>("POST", `/api/v1/installations/${id}/trash`, {
       revision,
     }),
+  restoreInstallation: (id: string) =>
+    api<{ ok: boolean }>("POST", `/api/v1/installations/${id}/restore`, {}),
   queryInstallations: (qs: string) =>
     api<{ items: InstallationDto[]; total: number }>(
       "GET",
       `/api/v1/installations?${qs}`,
     ),
+  listTrash: () =>
+    api<{ clients: ClientDto[]; installations: InstallationDto[] }>(
+      "GET",
+      "/api/v1/trash",
+    ),
+  restoreBatch: (batchId: string) =>
+    api<{ restored: number }>("POST", "/api/v1/trash/restore-batch", {
+      batchId,
+    }),
+  listCustomFields: () =>
+    api<{ items: CustomFieldDto[] }>("GET", "/api/v1/custom-fields"),
+  defineCustomField: (body: {
+    label: string;
+    type: "text" | "multiline" | "number" | "date";
+  }) => api<CustomFieldDto>("POST", "/api/v1/custom-fields", body),
+  archiveCustomField: (id: string, revision: number) =>
+    api<{ ok: boolean }>("POST", `/api/v1/custom-fields/${id}/archive`, {
+      revision,
+    }),
+  listCostServices: (category?: CostCategory) =>
+    api<{ items: CostServiceDto[] }>(
+      "GET",
+      category
+        ? `/api/v1/cost-services?category=${category}`
+        : "/api/v1/cost-services",
+    ),
+  createCostService: (body: {
+    category: CostCategory;
+    name: string;
+    priceInput: string;
+  }) => api<CostServiceDto>("POST", "/api/v1/cost-services", body),
+  updateCostService: (
+    id: string,
+    body: { revision: number; name?: string; priceInput?: string },
+  ) => api<CostServiceDto>("PATCH", `/api/v1/cost-services/${id}`, body),
+  trashCostService: (id: string, revision: number) =>
+    api<{ ok: boolean }>("POST", `/api/v1/cost-services/${id}/trash`, {
+      revision,
+    }),
   createBackup: () =>
     api<{ path: string; createdAt: string }>("POST", "/api/v1/backups", {}),
   getPreference: <T>(key: string) =>

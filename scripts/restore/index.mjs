@@ -6,6 +6,7 @@ import {
   pauseIfWindows,
   readConfig,
   resolvePaths,
+  writeConfig,
 } from "../lib/paths.mjs";
 
 function argValue(name) {
@@ -44,6 +45,13 @@ async function main() {
     archivePath: file,
     paths,
     confirmed: true,
+  });
+  // instance_id в config должен совпасть с базой из архива
+  writeConfig(paths, {
+    ...config,
+    instanceId: manifest.instanceId,
+    dataPath: paths.dbPath,
+    schemaVersion: manifest.schemaVersion,
   });
   console.log("Восстановлено из копии", manifest.createdAt);
   console.log("instance_id архива:", manifest.instanceId);

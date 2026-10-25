@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { formatMoneyMinor, parseMoneyInput } from "@workbook/domain";
 import { apiClient, type InstallationDto } from "../../api/client";
 import { emitSaveStatus } from "../../app/App";
+import { Button, TextArea, TextField } from "../../components";
+import ui from "../../components/ui.module.css";
 import { clearDraft, loadDraft, saveDraft } from "../../lib/drafts";
+import { publishMutation } from "../../lib/sync";
 import styles from "../../styles/app.module.css";
 
 export function DetailPanel({
@@ -26,22 +28,6 @@ export function DetailPanel({
     },
   });
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        if (dirtyRef.current) {
-          const leave = window.confirm(
-            "Есть несохранённые изменения. Закрыть?",
-          );
-          if (!leave) return;
-        }
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const dirtyRef = useRef(false);
 
   if (q.isLoading) {
@@ -59,9 +45,9 @@ export function DetailPanel({
         <div className={styles.drawerBackdrop} onClick={onClose} />
         <aside className={styles.drawer}>
           <p>Запись недоступна. Возможно, она в корзине.</p>
-          <button type="button" className={styles.btn} onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Закрыть
-          </button>
+          </Button>
         </aside>
       </>
     );
@@ -102,19 +88,18 @@ function Editor({
   const [workDate, setWorkDate] = useState(initial.workDate);
   const [dueDate, setDueDate] = useState(initial.dueDate ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
-  const [price, setPrice] = useState(
-    formatMoneyMinor(initial.priceMinor, initial.currencyScale),
-  );
-  const [cost, setCost] = useState(
-    formatMoneyMinor(initial.costMinor, initial.currencyScale),
-  );
-  const [installCost, setInstallCost] = useState(
-    formatMoneyMinor(initial.installationMinor, initial.currencyScale),
-  );
+  const [customValues, setCustomValues] = useState<
+    Record<string, string | number | null>
+  >(initial.customValues ?? {});
   const [status, setStatus] = useState("");
   const timer = useRef<number | null>(null);
   const skipAutosave = useRef(true);
   const draftChecked = useRef(false);
+
+  const fieldsQ = useQuery({
+    queryKey: ["custom-fields"],
+    queryFn: () => apiClient.listCustomFields(),
+  });
 
   useEffect(() => {
     if (draftChecked.current) return;
@@ -137,9 +122,6 @@ function Editor({
         if (typeof f.workDate === "string") setWorkDate(f.workDate);
         if (typeof f.dueDate === "string") setDueDate(f.dueDate);
         if (typeof f.notes === "string") setNotes(f.notes);
-        if (typeof f.price === "string") setPrice(f.price);
-        if (typeof f.cost === "string") setCost(f.cost);
-        if (typeof f.installCost === "string") setInstallCost(f.installCost);
       }
     });
   }, [initial.id, initial.revision]);
@@ -156,7 +138,7 @@ function Editor({
       entityId: initial.id,
       baseRevision: revision,
       updatedAt: new Date().toISOString(),
-      fields: { title, summary, workDate, dueDate, notes, price, cost, installCost },
+      fields: { title, summary, workDate, dueDate, notes },
     });
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
@@ -166,7 +148,7 @@ function Editor({
       if (timer.current) window.clearTimeout(timer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, summary, workDate, dueDate, notes, price, cost, installCost]);
+  }, [title, summary, workDate, dueDate, notes, customValues]);
 
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -179,19 +161,25 @@ function Editor({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirtyRef]);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (dirtyRef.current) {
+        const leave = window.confirm(
+          "Есть несохранённые изменения. Закрыть?",
+        );
+        if (!leave) return;
+      }
+      onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, dirtyRef]);
+
   async function save() {
     setStatus("Сохраняю…");
     emitSaveStatus("Сохраняю…");
     try {
-      const scale = initial.currencyScale;
-      for (const [label, raw] of [
-        ["Цена", price],
-        ["Себестоимость", cost],
-        ["Монтаж", installCost],
-      ] as const) {
-        const p = parseMoneyInput(raw, scale);
-        if (!p.ok) throw new Error(`${label}: ${p.error}`);
-      }
       const updated = await apiClient.updateInstallation(initial.id, {
         revision,
         title,
@@ -199,31 +187,53 @@ function Editor({
         workDate,
         dueDate: dueDate || null,
         notes,
-        priceInput: price,
-        costInput: cost,
-        installationCostInput: installCost,
+        customValues,
         allowDueBeforeWork: true,
       });
       setRevision(updated.revision);
       dirtyRef.current = false;
       await clearDraft(initial.id);
+      publishMutation(["installation", "month", "installations"]);
       const t = new Date();
       const stamp = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
       setStatus(`Сохранено в ${stamp}`);
       emitSaveStatus(`Сохранено в ${stamp}`);
       onChanged();
     } catch (e) {
-      const msg =
-        typeof e === "object" && e && "message" in e
-          ? String((e as { message: string }).message)
-          : "Ошибка";
+      const err = e as {
+        code?: string;
+        message?: string;
+        details?: { server?: InstallationDto };
+      };
+      if (err.code === "CONFLICT") {
+        const takeServer = window.confirm(
+          "Конфликт версий: запись изменена в другом месте.\nOK — взять серверную версию, Отмена — оставить ваши правки в форме.",
+        );
+        if (takeServer && err.details?.server) {
+          const s = err.details.server;
+          setRevision(s.revision);
+          setTitle(s.title);
+          setSummary(s.summary ?? "");
+          setWorkDate(s.workDate);
+          setDueDate(s.dueDate ?? "");
+          setNotes(s.notes ?? "");
+          setCustomValues(s.customValues ?? {});
+          dirtyRef.current = false;
+          setStatus("Загружена серверная версия");
+        } else {
+          setStatus("Конфликт — правки не сохранены");
+        }
+        emitSaveStatus("Не сохранено — конфликт версий");
+        return;
+      }
+      const msg = err.message ?? "Ошибка";
       setStatus(`Не сохранено — ${msg}`);
       emitSaveStatus("Не сохранено — повторить");
     }
   }
 
   return (
-    <>
+    <div className={styles.detailEditor}>
       <div
         style={{
           display: "flex",
@@ -238,83 +248,114 @@ function Editor({
             {status}
           </div>
         </div>
-        <button type="button" className={styles.btn} onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Закрыть
-        </button>
+        </Button>
       </div>
 
-      <div style={{ overflow: "auto", flex: 1 }}>
-        <div className={styles.field}>
-          <label>Название</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div className={styles.field}>
-          <label>Кратко</label>
-          <input value={summary} onChange={(e) => setSummary(e.target.value)} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className={styles.field}>
-            <label>Рабочая дата</label>
-            <input
-              type="date"
-              value={workDate}
-              onChange={(e) => setWorkDate(e.target.value)}
-            />
-          </div>
-          <div className={styles.field}>
-            <label>Срок сдачи</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <div className={styles.field}>
-            <label>Цена</label>
-            <input
-              className="tabular"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </div>
-          <div className={styles.field}>
-            <label>Себестоимость</label>
-            <input
-              className="tabular"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-            />
-          </div>
-          <div className={styles.field}>
-            <label>Монтаж, стоимость работ</label>
-            <input
-              className="tabular"
-              value={installCost}
-              onChange={(e) => setInstallCost(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className={styles.field}>
-          <label>Заметки</label>
-          <textarea
-            rows={10}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+      <div style={{ overflow: "auto", flex: 1, paddingRight: 4 }}>
+        <TextField
+          label="Название"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <TextArea
+          label="Доп инфа"
+          rows={4}
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+        />
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+        >
+          <TextField
+            label="Рабочая дата"
+            type="date"
+            value={workDate}
+            onChange={(e) => setWorkDate(e.target.value)}
+          />
+          <TextField
+            label="Срок сдачи"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
           />
         </div>
+        <TextArea
+          label="Заметки"
+          rows={8}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+
+        {(fieldsQ.data?.items ?? [])
+          .filter((f) => !f.archivedAt)
+          .map((f) =>
+            f.type === "multiline" ? (
+              <TextArea
+                key={f.id}
+                label={f.label}
+                rows={3}
+                value={String(customValues[f.id] ?? "")}
+                onChange={(e) =>
+                  setCustomValues((prev) => ({
+                    ...prev,
+                    [f.id]: e.target.value,
+                  }))
+                }
+              />
+            ) : (
+              <TextField
+                key={f.id}
+                label={f.label}
+                type={
+                  f.type === "number"
+                    ? "number"
+                    : f.type === "date"
+                      ? "date"
+                      : "text"
+                }
+                value={String(customValues[f.id] ?? "")}
+                onChange={(e) =>
+                  setCustomValues((prev) => ({
+                    ...prev,
+                    [f.id]:
+                      f.type === "number"
+                        ? e.target.value === ""
+                          ? null
+                          : Number(e.target.value)
+                        : e.target.value,
+                  }))
+                }
+              />
+            ),
+          )}
       </div>
 
-      <div style={{ paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          onClick={() => void save()}
-        >
+      <div
+        className={ui.btnRow}
+        style={{
+          paddingTop: 12,
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <Button variant="primary" onClick={() => void save()}>
           Сохранить сейчас
-        </button>
+        </Button>
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (!window.confirm("Переместить монтаж в корзину?")) return;
+            void apiClient.trashInstallation(initial.id, revision).then(() => {
+              publishMutation(["trash", "month", "installations"]);
+              onChanged();
+              onClose();
+            });
+          }}
+        >
+          В корзину
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

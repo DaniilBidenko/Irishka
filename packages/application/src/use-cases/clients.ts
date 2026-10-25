@@ -209,3 +209,10 @@ export function listClients(ports: AppPorts, kind: ClientKind): ClientRecord[] {
     );
   return [...pinned, ...rest];
 }
+
+export function listTrash(ports: AppPorts) {
+  return {
+    clients: ports.clients.listTrashed(),
+    installations: ports.installations.listTrashed(),
+  };
+}

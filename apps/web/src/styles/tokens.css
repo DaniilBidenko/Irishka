@@ -1,38 +1,59 @@
 :root {
-  --bg: #f6f3ec;
-  --surface: #fffefa;
-  --selected: #eee8db;
-  --text: #292d29;
-  --muted: #5f665e;
-  --border: #dcd6c8;
-  --accent: #486b59;
-  --hover: #f0ede4;
-  --done: #e8f0e5;
-  --danger: #a33d35;
-  --radius-card: 12px;
-  --radius-btn: 8px;
+  --background: #f5f4ef;
+  --bg: var(--background);
+  --surface: #fffefb;
+  --surface-subtle: #f0efe9;
+  --surface-hover: #ecefe8;
+  --selected: #e8f0e7;
+  --border: #e2e2d9;
+  --border-strong: #c7cec3;
+  --text: #28332d;
+  --text-secondary: #606b63;
+  --muted: var(--text-secondary);
+  --accent: #486d5a;
+  --accent-hover: #395a49;
+  --accent-soft: #e8f0e7;
+  --hover: var(--surface-hover);
+  --done: #e8f0e7;
+  --danger: #a43f3b;
+  --danger-soft: #faeeeb;
+  --warning-text: #815b1e;
+  --warning-soft: #f8eed9;
+
+  --radius-control: 10px;
+  --radius-btn: 10px;
+  --radius-card: 14px;
+  --radius-popover: 14px;
+  --control-h: 42px;
+  --control-h-sm: 36px;
+  --shadow-card: 0 1px 2px rgba(40, 51, 45, 0.04);
+  --shadow-popover: 0 8px 28px rgba(40, 51, 45, 0.12);
+
   --font: "Segoe UI", system-ui, sans-serif;
-  --fs: 16px;
+  --fs: 15px;
   --fs-sm: 13px;
-  --fs-title: 22px;
-  --stage-crm: #315d82;
-  --stage-you: #675184;
-  --stage-pp: #7b5c20;
-  --stage-mon: #236b66;
-  --stage-gv: #436a35;
-  --stage-so: #8d455d;
-  --deadline-ok: #436a35;
-  --deadline-warn: #9a6b16;
-  --deadline-danger: #a33d35;
-  --deadline-strong: #7a2420;
-  --deadline-muted: #5f665e;
-  --focus: #486b59;
+  --fs-title: 24px;
+  --lh: 1.5;
+
+  --stage-crm: #426c91;
+  --stage-you: #c45b8c;
+  --stage-mon: #1a1a1a;
+  --stage-so: #7ba87a;
+  --stage-pp: #d9772f;
+  --stage-ur: #c0392b;
+  --deadline-ok: #486d5a;
+  --deadline-yellow: #c9a227;
+  --deadline-orange: #d9772f;
+  --deadline-danger: #c0392b;
+  --deadline-overdue: #1a1a1a;
+  --deadline-muted: #606b63;
+  --focus: #486d5a;
 }
 
 :root[data-font-size="large"] {
-  --fs: 18px;
+  --fs: 17px;
   --fs-sm: 15px;
-  --fs-title: 24px;
+  --fs-title: 26px;
 }
 
 *,
@@ -52,8 +73,9 @@ body {
   font-family: var(--font);
   font-size: var(--fs);
   color: var(--text);
-  background: var(--bg);
-  line-height: 1.4;
+  background: var(--background);
+  line-height: var(--lh);
+  -webkit-font-smoothing: antialiased;
 }
 
 button,

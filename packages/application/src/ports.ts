@@ -1,4 +1,9 @@
-import type { ClientKind, StageCode, StagesMap } from "@workbook/domain";
+import type {
+  ClientKind,
+  CostCategory,
+  StageCode,
+  StagesMap,
+} from "@workbook/domain";
 
 export type ClientRecord = {
   id: string;
@@ -66,6 +71,7 @@ export type ClientRepository = {
     installationIds: string[],
   ) => { clientRevision: number };
   restoreBatch: (batchId: string, restoredAt: string) => number;
+  listTrashed: () => ClientRecord[];
 };
 
 export type InstallationRepository = {
@@ -115,6 +121,7 @@ export type InstallationRepository = {
     total: number;
   };
   listIdsForClient: (clientId: string, activeOnly: boolean) => string[];
+  listTrashed: () => InstallationListItem[];
 };
 
 export type InstallationQueryParams = {
@@ -163,6 +170,37 @@ export type CustomFieldRepository = {
   archive: (id: string, archivedAt: string, expectedRevision: number) => boolean;
 };
 
+export type CostServiceRecord = {
+  id: string;
+  category: CostCategory;
+  name: string;
+  priceMinor: number;
+  currencyCode: string;
+  currencyScale: number;
+  sortOrder: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type CostServiceRepository = {
+  list: (opts?: {
+    category?: CostCategory;
+    includeDeleted?: boolean;
+  }) => CostServiceRecord[];
+  findById: (
+    id: string,
+    opts?: { includeDeleted?: boolean },
+  ) => CostServiceRecord | null;
+  insert: (row: CostServiceRecord) => void;
+  update: (row: CostServiceRecord, expectedRevision: number) => boolean;
+  softDelete: (
+    id: string,
+    deletedAt: string,
+    expectedRevision: number,
+  ) => boolean;
+};
 export type LayoutRepository = {
   getLayout: (scope: "main" | "compact") => Array<{
     fieldKey: string;
@@ -220,6 +258,7 @@ export type AppPorts = {
   installations: InstallationRepository;
   settings: SettingsRepository;
   customFields: CustomFieldRepository;
+  costServices: CostServiceRepository;
   layouts: LayoutRepository;
   operations: OperationStore;
   changeLog: ChangeLogPort;

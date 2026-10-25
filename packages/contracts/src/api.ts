@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const ClientKindSchema = z.enum(["corporate", "retail"]);
-export const StageCodeSchema = z.enum(["CRM", "YOU", "PP", "MON", "GV", "SO"]);
+export const StageCodeSchema = z.enum(["CRM", "YOU", "MON", "SO", "PP", "UR"]);
 
 export const IsoDateSchema = z
   .string()
@@ -89,9 +89,13 @@ export const QueryInstallationsSchema = z.object({
   dueBucket: z
     .enum(["none", "soon", "overdue"])
     .optional(),
-  stages: z
-    .record(StageCodeSchema, z.enum(["any", "on", "off"]))
-    .optional(),
+  /** Плоские query-параметры этапов: stageCRM=on|off */
+  stageCRM: z.enum(["any", "on", "off"]).optional(),
+  stageYOU: z.enum(["any", "on", "off"]).optional(),
+  stageMON: z.enum(["any", "on", "off"]).optional(),
+  stageSO: z.enum(["any", "on", "off"]).optional(),
+  stagePP: z.enum(["any", "on", "off"]).optional(),
+  stageUR: z.enum(["any", "on", "off"]).optional(),
   sort: z
     .enum(["due", "workDate", "title", "updatedAt"])
     .optional(),
@@ -104,6 +108,25 @@ export const DefineCustomFieldSchema = z.object({
   label: z.string().trim().min(1).max(100),
   type: z.enum(["text", "multiline", "number", "date"]),
   operationId: z.string().uuid().optional(),
+});
+
+export const CostCategorySchema = z.enum([
+  "polygraphy",
+  "souvenirs",
+  "outdoor",
+]);
+
+export const CreateCostServiceSchema = z.object({
+  category: CostCategorySchema,
+  name: z.string().trim().min(1).max(200),
+  priceInput: z.string().trim().min(1).max(32),
+  operationId: z.string().uuid().optional(),
+});
+
+export const UpdateCostServiceSchema = z.object({
+  revision: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200).optional(),
+  priceInput: z.string().trim().min(1).max(32).optional(),
 });
 
 export const SaveLayoutSchema = z.object({
@@ -131,3 +154,5 @@ export type UpdateClientInput = z.infer<typeof UpdateClientSchema>;
 export type CreateInstallationInput = z.infer<typeof CreateInstallationSchema>;
 export type UpdateInstallationInput = z.infer<typeof UpdateInstallationSchema>;
 export type QueryInstallationsInput = z.infer<typeof QueryInstallationsSchema>;
+export type CreateCostServiceInput = z.infer<typeof CreateCostServiceSchema>;
+export type UpdateCostServiceInput = z.infer<typeof UpdateCostServiceSchema>;

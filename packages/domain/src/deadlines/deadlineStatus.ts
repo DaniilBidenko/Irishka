@@ -3,7 +3,7 @@
 export type DeadlineKind =
   | "none"
   | "ok"
-  | "soon"
+  | "inTwoDays"
   | "tomorrow"
   | "today"
   | "overdue"
@@ -16,9 +16,10 @@ export type DeadlineStatus = {
   tone:
     | "muted"
     | "ok"
-    | "warn"
+    | "yellow"
+    | "orange"
     | "danger"
-    | "dangerStrong"
+    | "overdue"
     | "done";
   daysRemaining: number | null;
 };
@@ -34,15 +35,20 @@ export function calendarDaysBetween(fromIso: string, toIso: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
+/**
+ * Цвета сроков:
+ * — больше 2 дней: спокойный зелёный
+ * — ровно 2 дня: жёлтый
+ * — завтра (1): оранжевый
+ * — сегодня (0): красный
+ * — просрочено (&lt;0): чёрный
+ */
 export function computeDeadlineStatus(input: {
   dueDate: string | null;
   completed: boolean;
   completedAtDate?: string | null;
-  soonThresholdDays?: number;
   todayIso: string;
 }): DeadlineStatus {
-  const soon = input.soonThresholdDays ?? 3;
-
   if (input.completed) {
     return {
       kind: "done",
@@ -65,7 +71,7 @@ export function computeDeadlineStatus(input: {
 
   const days = calendarDaysBetween(input.todayIso, input.dueDate);
 
-  if (days > soon) {
+  if (days > 2) {
     return {
       kind: "ok",
       label: `Осталось ${days} дн.`,
@@ -73,19 +79,19 @@ export function computeDeadlineStatus(input: {
       daysRemaining: days,
     };
   }
-  if (days >= 2 && days <= soon) {
+  if (days === 2) {
     return {
-      kind: "soon",
-      label: `Скоро · ${days} дн.`,
-      tone: "warn",
-      daysRemaining: days,
+      kind: "inTwoDays",
+      label: "Через 2 дн.",
+      tone: "yellow",
+      daysRemaining: 2,
     };
   }
   if (days === 1) {
     return {
       kind: "tomorrow",
       label: "Завтра",
-      tone: "danger",
+      tone: "orange",
       daysRemaining: 1,
     };
   }
@@ -100,8 +106,11 @@ export function computeDeadlineStatus(input: {
   const overdue = Math.abs(days);
   return {
     kind: "overdue",
-    label: `Просрочено на ${overdue} дн.`,
-    tone: "dangerStrong",
+    label:
+      overdue === 1
+        ? "Просрочено вчера"
+        : `Просрочено на ${overdue} дн.`,
+    tone: "overdue",
     daysRemaining: days,
   };
 }
